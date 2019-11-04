@@ -7,13 +7,15 @@ import { Link } from 'react-router-dom';
 import api from '../../services/api';
 
 import Container from '../../components/Container';
-import { Form, SubmitButton, List } from './styles';
+import { Form, SubmitButton, List, ErrorMessage } from './styles';
 
 export default class Main extends Component {
   state = {
     newRepo: '',
     repositories: [],
     loading: false,
+    error: null,
+    errMsg: '',
   };
 
   // Carregar os dados do localStorage
@@ -35,8 +37,7 @@ export default class Main extends Component {
   }
 
   handleInputChange = e => {
-    // e = evento
-    this.setState({ newRepo: e.target.value }); // taget.value, mostrar valor digitado
+    this.setState({ newRepo: e.target.value, error: null });
   };
 
   handleSubmit = async e => {
@@ -47,7 +48,25 @@ export default class Main extends Component {
     try {
       const { newRepo, repositories } = this.state;
 
-      const response = await api.get(`/repos/${newRepo}`);
+      // Com este formato o axios traz por padrão error padrão por falta de valores no if
+
+      // const response = await api.get(`/repos/${newRepo}`);
+      // if (newRepo === '') throw new Error('Repositório não existe!');
+
+      // Evitar o error 404 do axios
+      const response = await api.get(`/repos/${newRepo}`).catch(error => {
+        if (error.response.status === 404) {
+          throw new Error('Repositório não existe!');
+        }
+      });
+
+      const repoExists = repositories.find(
+        repo => repo.name === response.data.full_name
+      );
+
+      if (repoExists) {
+        throw new Error('Repositório duplicado!');
+      }
 
       const data = {
         name: response.data.full_name,
@@ -59,14 +78,17 @@ export default class Main extends Component {
         loading: false,
       });
     } catch (error) {
-      this.setState({ error: true });
+      this.setState({
+        error: true,
+        errorMsg: error.response ? error.response.data.message : error.message,
+      });
     } finally {
       this.setState({ loading: false });
     }
   };
 
   render() {
-    const { newRepo, loading, repositories, error } = this.state;
+    const { newRepo, loading, repositories, error, errorMsg } = this.state;
 
     return (
       <Container>
@@ -83,7 +105,7 @@ export default class Main extends Component {
             onChange={this.handleInputChange}
           />
 
-          <SubmitButton loading={loading}>
+          <SubmitButton loading={loading ? 1 : 0}>
             {loading ? (
               <FaSpinner color="#FFF" size={14} />
             ) : (
@@ -91,6 +113,12 @@ export default class Main extends Component {
             )}
           </SubmitButton>
         </Form>
+
+        {error && (
+          <ErrorMessage>
+            <p>{errorMsg}</p>
+          </ErrorMessage>
+        )}
 
         <List>
           {repositories.map(repository => (
